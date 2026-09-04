@@ -859,8 +859,14 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
 #endif //CONFIG_IPV6
 #endif //WIFI_HAL_VERSION_3_PHASE2
 
-        strcpy(conf->radius->auth_servers[0].shared_secret, radius_cfg->key);
-        conf->radius->auth_servers[0].shared_secret_len = strlen(conf->radius->auth_servers[0].shared_secret);
+        size_t key_len = strnlen(radius_cfg->key, 64);
+        if (key_len == 64) {
+            wifi_hal_error_print("%s:%d: RADIUS primary key too long\n", __func__, __LINE__);
+            return RETURN_ERR;
+        }
+        memcpy(conf->radius->auth_servers[0].shared_secret, radius_cfg->key, key_len);
+        conf->radius->auth_servers[0].shared_secret[key_len] = '\0';
+        conf->radius->auth_servers[0].shared_secret_len = key_len;
         conf->radius->auth_servers[0].port = radius_cfg->port;
         
 #ifdef WIFI_HAL_VERSION_3_PHASE2
@@ -887,8 +893,14 @@ int update_security_config(wifi_vap_security_t *sec, struct hostapd_bss_config *
 #endif //CONFIG_IPV6
 #endif //WIFI_HAL_VERSION_3_PHASE2
 
-        strcpy(conf->radius->auth_servers[1].shared_secret, radius_cfg->s_key);
-        conf->radius->auth_servers[1].shared_secret_len = strlen(conf->radius->auth_servers[1].shared_secret);
+        size_t skey_len = strnlen(radius_cfg->s_key, 64);
+        if (skey_len == 64) {
+            wifi_hal_error_print("%s:%d: RADIUS secondary key too long\n", __func__, __LINE__);
+            return RETURN_ERR;
+        }
+        memcpy(conf->radius->auth_servers[1].shared_secret, radius_cfg->s_key, skey_len);
+        conf->radius->auth_servers[1].shared_secret[skey_len] = '\0';
+        conf->radius->auth_servers[1].shared_secret_len = skey_len;
         conf->radius->auth_servers[1].port = radius_cfg->s_port;
 
         if (is_open_sec_radius_auth(sec)) {
@@ -1318,6 +1330,11 @@ int update_hostap_bss(wifi_interface_info_t *interface)
             if(rc == NULL) {
                 wifi_hal_error_print("%s:%d, Failed to add roaming consortium, indx: %d\n", __func__, __LINE__, j);
             } else {
+                if (rc_p->wifiRoamingConsortiumLen[j] > sizeof(rc[0].oi)) {
+                    wifi_hal_error_print("%s:%d: roaming consortium OI too large (%u > %zu), indx: %d\n",
+                        __func__, __LINE__, rc_p->wifiRoamingConsortiumLen[j], sizeof(rc[0].oi), j);
+                    return RETURN_ERR;
+                }
                 os_memcpy(rc[conf->roaming_consortium_count].oi, rc_p->wifiRoamingConsortiumOui[j], rc_p->wifiRoamingConsortiumLen[j]);
                 rc[conf->roaming_consortium_count].len = rc_p->wifiRoamingConsortiumLen[j];
                 conf->roaming_consortium = rc;
