@@ -25,6 +25,7 @@
 #include <stdbool.h>
 #include <inttypes.h>
 #include "wifi_hal_rdk.h"
+#include "wifi_hal_priv.h"
 
 #define TLV_HDR_SIZE (2 * sizeof(unsigned short))
 
@@ -33,24 +34,33 @@ wifi_tlv_t *get_tlv(unsigned char *buff, unsigned short attrib, unsigned short l
     unsigned int total_len = 0;
     wifi_tlv_t *tlv = (wifi_tlv_t *)buff;
 
+    wifi_hal_dbg_print("%s:%d Enter: attrib=0x%04x len=%u\n", __func__, __LINE__, attrib, len);
+
     while (total_len < len) {
         unsigned int remaining = len - total_len;
 
         /* Ensure the 4-byte TLV header fits before dereferencing */
-        if (remaining < TLV_HDR_SIZE)
+        if (remaining < TLV_HDR_SIZE) {
+            wifi_hal_dbg_print("%s:%d Exit 2: header exceeds remaining=%u\n", __func__, __LINE__, remaining);
             break;
+        }
 
         /* Ensure the full TLV (header + value) fits within the buffer */
-        if (tlv->length > remaining - TLV_HDR_SIZE)
+        if (tlv->length > remaining - TLV_HDR_SIZE) {
+            wifi_hal_dbg_print("%s:%d Exit 2: tlv->length=%u exceeds remaining=%u\n", __func__, __LINE__, tlv->length, remaining);
             break;
+        }
 
-        if (tlv->type == attrib)
+        if (tlv->type == attrib) {
+            wifi_hal_dbg_print("%s:%d Exit 1: found attrib=0x%04x at offset=%u\n", __func__, __LINE__, attrib, total_len);
             return tlv;
+        }
 
         total_len += TLV_HDR_SIZE + tlv->length;
         tlv = (wifi_tlv_t *)((unsigned char *)tlv + TLV_HDR_SIZE + tlv->length);
     }
 
+    wifi_hal_dbg_print("%s:%d Exit end: attrib=0x%04x not found\n", __func__, __LINE__, attrib);
     return NULL;
 }
 

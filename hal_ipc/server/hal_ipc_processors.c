@@ -1151,10 +1151,12 @@ int ipc_server_output(struct hal_ipc_processor_desc *desc,
             break;
     }
 
+    wifi_hal_dbg_print("%s:%d Exit 1: %s completed successfully\n", __func__, __LINE__, desc->name);
     return 0;
 
 error_happened:
     cleanup_client_data(&client_scratch_buf, client_data_len);
+    wifi_hal_dbg_print("%s:%d Exit end: %s failed\n", __func__, __LINE__, desc->name);
     return -1;
 }
 
