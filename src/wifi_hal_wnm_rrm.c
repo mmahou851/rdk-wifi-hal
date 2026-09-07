@@ -139,6 +139,11 @@ typedef struct wnm_notif_req {
     u8 type;
 } STRUCT_PACKED wnm_notif_req_t;
 
+static inline bool is_valid_ap_index(int ap_index)
+{
+    return (ap_index >= MIN_AP_INDEX && ap_index < MAX_AP_INDEX);
+}
+
 
 /* Implementation is based on ieee802_11_send_bss_trans_mgmt_request() from wnm_ap.c */
 static int wifi_ieee802_11_send_bss_trans_mgmt_request(struct hostapd_data *hapd,
@@ -211,6 +216,7 @@ static int handle_rx_bss_trans_mgmt_query(wifi_interface_info_t *interface,
     bool mutex_locked = false;
     struct hostapd_data *hapd = &interface->u.ap.hapd;
     int ap_index = interface->vap_info.vap_index;
+    wifi_hal_dbg_print("%s:%d bharathi enter\n", __func__, __LINE__);
 #ifdef CONFIG_USE_HOSTAP_BTM_PATCH
     bool wnm_bss_trans_query_auto_resp = hapd->conf->wnm_bss_trans_query_auto_resp;
 #else
@@ -374,6 +380,7 @@ static int handle_rx_bss_trans_mgmt_query(wifi_interface_info_t *interface,
             //mbo_len ? mbo_attributes : NULL, mbo_len);
             NULL, 0);
     ret = WIFI_HAL_SUCCESS;
+    wifi_hal_dbg_print("%s:%d bharathi exit\n", __func__, __LINE__);
 
 exit:
     if (mutex_locked) {
@@ -413,6 +420,11 @@ static int handle_rx_bss_trans_mgmt_resp(wifi_interface_info_t *interface,
     bool mutex_locked = false;
     struct hostapd_data *hapd = &interface->u.ap.hapd;
     int ap_index = interface->vap_info.vap_index;
+
+    if (!is_valid_ap_index(ap_index)) {
+        wifi_hal_error_print("%s:%d invalid ap_index=%d\n", __func__, __LINE__, ap_index);
+	    return WIFI_HAL_ERROR;
+    }
 
     if (NULL == callbacks->btm_callback[ap_index].response_callback)
         return WIFI_HAL_SUCCESS;
@@ -996,6 +1008,13 @@ static void call_BeaconReport_callback(uint ap_index, wifi_BeaconReport_t *rep, 
 {
     wifi_device_callbacks_t *callbacks = get_hal_device_callbacks();
 
+    wifi_hal_dbg_print("%s:%d: bharathi enter ap_index=%d \n", __func__, __LINE__, ap_index);
+
+    if (!is_valid_ap_index(ap_index)) {
+        wifi_hal_error_print("%s:%d invalid ap_index=%d\n", __func__, __LINE__, ap_index);
+        return;
+    }
+
     if (NULL == callbacks->bcnrpt_callback[ap_index])
         return;
 
@@ -1012,6 +1031,7 @@ static void call_BeaconReport_callback(uint ap_index, wifi_BeaconReport_t *rep, 
             wifi_hal_error_print("%s:%d: incorrect implementation of callback function\n", __func__, __LINE__);
         }
     }
+    wifi_hal_dbg_print("%s:%d: bharathi exit ap_index=%d \n", __func__, __LINE__, ap_index);
 }
 
 /* Implementation is based on hostapd_handle_beacon_report_response(). See 9.4.2.22.7 Beacon report */

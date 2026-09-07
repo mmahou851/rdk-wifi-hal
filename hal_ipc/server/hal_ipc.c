@@ -942,6 +942,7 @@ int rdk_hal_ipc_exec(hal_ipc_node_t *p_ipc_node, hal_ipc_processor_desc_t *desc)
 //--------------------------------------------------------------------------------------------------
 static void *rdk_hal_server_func(void *arg)
 {
+    wifi_hal_dbg_print("%s:%d: KondammaEntry\n", __func__, __LINE__);
     int cli_sock;
     ssize_t nbytes, target_bytes, max_size = MAX_IPC_BUFF;
     socklen_t len;
@@ -1084,7 +1085,16 @@ static void *rdk_hal_server_func(void *arg)
         ///**************************************************************************************///
         ///                 call the associated descriptor processor                             ///
         ///**************************************************************************************///
-        serv_processor = processor_desc[desc.type].ipc_processor[processor_type_ipc_server_output];
+        if ((int)desc.type < 0 || desc.type >= hal_ipc_desc_type_max) {
+            wifi_hal_error_print("%s:%d: invalid desc.type=%d\n", __func__, __LINE__, desc.type);
+            desc.ret = -1;
+            desc.len = sizeof(hal_ipc_processor_desc_t);
+            desc.scratch_buf_size = 0;
+            serv_processor = NULL;
+        }
+        else {
+          serv_processor = processor_desc[desc.type].ipc_processor[processor_type_ipc_server_output];
+        }
 
         if ((serv_processor != NULL) && (serv_processor(&desc, NULL, NULL, NULL, NULL, NULL) != 0)) {
             wifi_hal_error_print("%s:%d: Execution failed: %s\n", __func__, __LINE__, desc.name);
@@ -1174,6 +1184,7 @@ static void *rdk_hal_server_func(void *arg)
     close(p_ipc_node->srv_sock);
 
     wifi_hal_dbg_print("%s:%d: Exit.\n", __func__, __LINE__);
+    wifi_hal_dbg_print("%s:%d: KondammaExit\n", __func__, __LINE__);
 
     return NULL;
 }

@@ -1061,6 +1061,7 @@ get_config_frame_wrapped_data(unsigned char *ptr, unsigned int attrib_len, wifi_
 int
 get_auth_frame_wrapped_data(wifi_dppPublicActionFrameBody_t *frame, unsigned int attrib_len, wifi_dpp_instance_t *instance, unsigned char *plain, unsigned int len, bool reconfig)
 {
+    printf("%s:%d: KondamamEntry\n", __func__, __LINE__);
     siv_ctx ctx;
     wifi_tlv_t *tlv;
     unsigned int non_wrapped_len;;
@@ -1095,14 +1096,23 @@ get_auth_frame_wrapped_data(wifi_dppPublicActionFrameBody_t *frame, unsigned int
     printf("%s:%d: Non wrapped length:%d, must match with %d attrib_len:%d\n", __func__, __LINE__, 
         non_wrapped_len, attrib_len - tlv->length, attrib_len);
 
+    if (tlv->length < AES_BLOCK_SIZE || tlv->length > (len + AES_BLOCK_SIZE)) {
+        wifi_dpp_dbg_print("%s:%d invalid wrapped_data length=%u\n", __func__, __LINE__, tlv->length);
+        return -1;
+    }
     decrypted_len = siv_decrypt(&ctx, &tlv->value[AES_BLOCK_SIZE], plain, tlv->length - AES_BLOCK_SIZE, tlv->value, 2,
                         frame, sizeof(wifi_dppPublicActionFrameBody_t),
                         frame->attrib, non_wrapped_len);
-        
+
+    if (decrypted_len < 0 || (unsigned int)decrypted_len > len) {
+        wifi_dpp_dbg_print("%s:%d invalid decrypt length=%d\n", __func__, __LINE__, decrypted_len);
+        return -1;
+    }
     printf("%s:%d: Decrypted length:%d\n", __func__, __LINE__, decrypted_len);
+    printf("%s:%d: KondamamExit\n", __func__, __LINE__);
 
 
-    return (decrypted_len == -1) ? -1:tlv->length - AES_BLOCK_SIZE;
+    return decrypted_len;
 }
 
 int
@@ -2218,7 +2228,12 @@ wifi_dppProcessReconfigAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
     if ((tlv = get_tlv(frame->attrib, wifi_dpp_attrib_id_proto_version, attrib_len)) == NULL) {
 		return RETURN_ERR;
     } else {
-        memcpy((unsigned char *)&dpp_ctx->enrollee_version, (unsigned char *)tlv->value, tlv->length);
+        if (tlv->length != sizeof(dpp_ctx->enrollee_version)) {
+            wifi_dpp_dbg_print("%s:%d invalid protocol version length=%u\n", __func__, __LINE__, tlv->length);
+            dpp_ctx->enrollee_status = RESPONDER_STATUS_AUTH_FAILURE;
+            return RETURN_ERR;
+        }
+        dpp_ctx->enrollee_version = tlv->value[0];
         wifi_dpp_dbg_print("%s:%d dpp_ctx->enrollee_version = %d\n", __func__, __LINE__, dpp_ctx->enrollee_version);
     }
 
@@ -2306,7 +2321,14 @@ wifi_dppProcessReconfigAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
 
     printf("Responder nonce: ");
     print_hex_dump(tlv->length, tlv->value);
-    memcpy(instance->responder_nonce, tlv->value, tlv->length);
+    if (tlv->length != instance->noncelen) {
+        wifi_dpp_dbg_print("%s:%d responder nonce length mismatch %u/%u\n", __func__, __LINE__,
+            tlv->length, instance->noncelen);
+        dpp_ctx->enrollee_status = RESPONDER_STATUS_AUTH_FAILURE;
+        return RETURN_ERR;
+    }
+    wifi_dpp_dbg_print("%s:%d NTesting responder nonce length accepted=%u\n", __func__, __LINE__, tlv->length);
+    memcpy(instance->responder_nonce, tlv->value, instance->noncelen);
 
     if ((tlv = get_tlv(primary, wifi_dpp_attrib_id_responder_cap, decrypted_len)) == NULL) {
         wifi_dpp_dbg_print("%s:%d: Failed to get responder capabilitie\n", __func__, __LINE__);
@@ -2320,7 +2342,8 @@ wifi_dppProcessReconfigAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
         wifi_dpp_dbg_print("%s:%d: Failed to get initiator nonce nonce\n", __func__, __LINE__);
         dpp_ctx->enrollee_status = RESPONDER_STATUS_AUTH_FAILURE;
         return RETURN_ERR;
-    } else if (memcmp(tlv->value, instance->initiator_nonce, tlv->length) != 0) {
+    } else if (tlv->length != instance->noncelen ||
+        memcmp(tlv->value, instance->initiator_nonce, instance->noncelen) != 0) {
         wifi_dpp_dbg_print("%s:%d: initiator nonce mismatch\n", __func__, __LINE__);
         dpp_ctx->enrollee_status = RESPONDER_STATUS_AUTH_FAILURE;
         return RETURN_ERR;
@@ -2556,8 +2579,13 @@ INT wifi_dppProcessAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
         dpp_ctx->enrollee_version = 1;
         printf("%s:%d dpp_ctx->enrollee_version = %d\n", __func__, __LINE__, dpp_ctx->enrollee_version);
     } else {
-        memcpy((unsigned char *)&dpp_ctx->enrollee_version, (unsigned char *)tlv->value, tlv->length);
-        printf("%s:%d dpp_ctx->enrollee_version = %d\n", __func__, __LINE__, dpp_ctx->enrollee_version);
+        if (tlv->length != sizeof(dpp_ctx->enrollee_version)) {
+            wifi_dpp_dbg_print("%s:%d invalid protocol version length=%u\n", __func__, __LINE__, tlv->length);
+            dpp_ctx->enrollee_status = RESPONDER_STATUS_AUTH_FAILURE;
+            return RETURN_ERR;
+        }
+        dpp_ctx->enrollee_version = tlv->value[0];
+        wifi_dpp_dbg_print("%s:%d NTesting dpp_ctx->enrollee_version = %d\n", __func__, __LINE__, dpp_ctx->enrollee_version);
     }
 
     tlv = get_tlv(frame->attrib, wifi_dpp_attrib_id_status, attrib_len);
@@ -2684,7 +2712,14 @@ INT wifi_dppProcessAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
 
     printf("Responder nonce: ");
     print_hex_dump(tlv->length, tlv->value);
-    memcpy(instance->responder_nonce, tlv->value, tlv->length);
+    if (tlv->length != instance->noncelen) {
+        wifi_dpp_dbg_print("%s:%d responder nonce length mismatch %u/%u\n", __func__, __LINE__,
+            tlv->length, instance->noncelen);
+        dpp_ctx->enrollee_status = RESPONDER_STATUS_AUTH_FAILURE;
+        return RETURN_ERR;
+    }
+    wifi_dpp_dbg_print("%s:%d NTesting responder nonce length accepted=%u\n", __func__, __LINE__, tlv->length);
+    memcpy(instance->responder_nonce, tlv->value, instance->noncelen);
 
     if ((tlv = get_tlv(primary, wifi_dpp_attrib_id_responder_cap, decrypted_len)) == NULL) {
         printf("%s:%d: Failed to get responder capabilitie\n", __func__, __LINE__);
