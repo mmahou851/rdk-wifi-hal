@@ -2198,11 +2198,17 @@ wifi_dppProcessReconfigAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
     len = dpp_ctx->received_frame.length;
 
     attrib_len = len - sizeof(wifi_dppPublicActionFrameBody_t);
-
     if ((tlv = get_tlv(frame->attrib, wifi_dpp_attrib_id_transaction_id, attrib_len)) == NULL) {
-		return RETURN_ERR;
-    } else {
+        wifi_dpp_dbg_print("%s:%d invalid transaction id\n", __func__, __LINE__);
+		return RETURN_ERR; 
+    } 
+    else if(tlv->length != sizeof(tran_id)) {
+        wifi_dpp_dbg_print("%s:%d invalid transaction id len=%u\n",__func__, __LINE__, tlv->length);
+        return RETURN_ERR;
+    }
+    else {
         memcpy(&tran_id, (unsigned char *)tlv->value, tlv->length);
+        wifi_dpp_dbg_print("%s:%d transaction id=%d\n",__func__, __LINE__, tran_id);
         for(i=(dpp_ctx->dpp_init_retries); i >= 0; i--){ 
             if (tran_id == data->u.reconfig_data.tran_id[i]){
             	wifi_dpp_dbg_print("%s:%d: transaction id match\n", __func__, __LINE__);
@@ -2326,6 +2332,7 @@ wifi_dppProcessReconfigAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
         return RETURN_ERR;
 	}
 
+	wifi_dpp_dbg_print("%s:%d: Exit\n", __func__, __LINE__);
 	return RETURN_OK;
 }
 
@@ -2360,6 +2367,7 @@ wifi_dppProcessReconfigAnnouncement(unsigned char *frame, unsigned int len, unsi
 INT
 wifi_dppProcessConfigResult(wifi_device_dpp_context_t *dpp_ctx)
 {
+    wifi_dpp_dbg_print("%s:%d: Enter\n", __func__, __LINE__);
     unsigned int attrib_len;
 	int decrypted_len;
     siv_ctx ctx;
@@ -2465,8 +2473,13 @@ wifi_dppProcessConfigResult(wifi_device_dpp_context_t *dpp_ctx)
     if ((tlv = get_tlv(plain, wifi_dpp_attrib_id_status, len)) == NULL) {
         dpp_ctx->enrollee_status = RESPONDER_STATUS_CONFIGURATION_FAILURE;
 		return RETURN_ERR;
-	}
+    }
 
+    else if (tlv->length != sizeof(status)) {
+        wifi_dpp_dbg_print("%s:%d invalid status length=%u\n",__func__, __LINE__, tlv->length);
+        dpp_ctx->enrollee_status = RESPONDER_STATUS_CONFIGURATION_FAILURE;
+        return RETURN_ERR;
+    }
 	memcpy(&status, tlv->value, tlv->length);
 	if (status != 0) {
         dpp_ctx->enrollee_status = RESPONDER_STATUS_CONFIGURATION_FAILURE;
@@ -2475,6 +2488,7 @@ wifi_dppProcessConfigResult(wifi_device_dpp_context_t *dpp_ctx)
         
 	dpp_ctx->enrollee_status = RESPONDER_STATUS_OK;
 
+	wifi_dpp_dbg_print("%s:%d: Exit\n", __func__, __LINE__);
 	return RETURN_OK;
 }
 
@@ -2522,6 +2536,7 @@ wifi_dppProcessConfigRequest(wifi_device_dpp_context_t *ctx)
 
 INT wifi_dppProcessAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
 {
+    wifi_dpp_dbg_print("%s:%d: Enter\n", __func__, __LINE__);
     unsigned char keyasn1[1024];
     unsigned char keyhash[SHA512_DIGEST_LENGTH];
     unsigned char *key;
@@ -2552,14 +2567,19 @@ INT wifi_dppProcessAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
 	len = dpp_ctx->received_frame.length; 
 
 	attrib_len = len - sizeof(wifi_dppPublicActionFrameBody_t);
-    if ((tlv = get_tlv(frame->attrib, wifi_dpp_attrib_id_proto_version, attrib_len)) == NULL) {
+    if ((tlv = get_tlv(frame->attrib, wifi_dpp_attrib_id_proto_version, attrib_len)) == NULL)  {
         dpp_ctx->enrollee_version = 1;
         printf("%s:%d dpp_ctx->enrollee_version = %d\n", __func__, __LINE__, dpp_ctx->enrollee_version);
-    } else {
+    }
+    else if (tlv->length != sizeof(dpp_ctx->enrollee_version)) {
+            wifi_dpp_dbg_print("%s:%d invalid protocol version length=%u\n",__func__, __LINE__, tlv->length);
+            dpp_ctx->enrollee_status = RESPONDER_STATUS_AUTH_FAILURE;
+            return RETURN_ERR;
+    }
+    else {
         memcpy((unsigned char *)&dpp_ctx->enrollee_version, (unsigned char *)tlv->value, tlv->length);
         printf("%s:%d dpp_ctx->enrollee_version = %d\n", __func__, __LINE__, dpp_ctx->enrollee_version);
     }
-
     tlv = get_tlv(frame->attrib, wifi_dpp_attrib_id_status, attrib_len);
     if (tlv != NULL) {
         status = *tlv->value;
@@ -2681,7 +2701,11 @@ INT wifi_dppProcessAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
 		dpp_ctx->enrollee_status = RESPONDER_STATUS_AUTH_FAILURE;
         return RETURN_ERR;
     }
-
+     else if (tlv->length != instance->noncelen || tlv->length > sizeof(instance->responder_nonce)) {
+        wifi_dpp_dbg_print("%s:%d: Invalid responder nonce length=%u\n",__func__, __LINE__, tlv->length);
+        dpp_ctx->enrollee_status = RESPONDER_STATUS_AUTH_FAILURE;
+        return RETURN_ERR;
+    }
     printf("Responder nonce: ");
     print_hex_dump(tlv->length, tlv->value);
     memcpy(instance->responder_nonce, tlv->value, tlv->length);
@@ -2766,6 +2790,7 @@ INT wifi_dppProcessAuthResponse(wifi_device_dpp_context_t *dpp_ctx)
     data->channel = channel_to_frequency(channel);
 
 	dpp_ctx->enrollee_status = RESPONDER_STATUS_OK;
+    wifi_dpp_dbg_print("%s:%d: Exit\n", __func__, __LINE__);
     return RETURN_OK;
 }
 
