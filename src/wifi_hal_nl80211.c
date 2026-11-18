@@ -688,6 +688,7 @@ static void parse_vht_cap(wifi_steering_evConnect_t *steering_event, uint32_t vh
 void create_connect_steering_event(wifi_interface_info_t *interface, wifi_steering_evConnect_t *steering_event,
     struct ieee80211_mgmt *mgmt, unsigned int len)
 {
+    wifi_hal_dbg_print("%s:%d: Entry to Manish\n", __func__, __LINE__);
     wifi_radio_info_t *radio;
     ieee80211_tlv_t *he_cap_tlv = NULL;
     unsigned short he_cap_len;
@@ -720,6 +721,7 @@ void create_connect_steering_event(wifi_interface_info_t *interface, wifi_steeri
         }
         l_variable = (unsigned char *)mgmt->u.reassoc_req.variable;
         ie_len = len - (IEEE80211_HDRLEN + sizeof(mgmt->u.reassoc_req));
+        wifi_hal_dbg_print("%s:%d: Reassoc variable length: %zu\n", __func__, __LINE__, ie_len);
     } else {
         if (len < IEEE80211_HDRLEN + sizeof(mgmt->u.assoc_req)) {
             wifi_hal_error_print("%s:%d: assoc frame too short (len=%u)\n", __func__, __LINE__, len);
@@ -727,6 +729,7 @@ void create_connect_steering_event(wifi_interface_info_t *interface, wifi_steeri
         }
         l_variable = (unsigned char *)mgmt->u.assoc_req.variable;
         ie_len = len - (IEEE80211_HDRLEN + sizeof(mgmt->u.assoc_req));
+        wifi_hal_dbg_print("%s:%d: Assoc variable length: %zu\n", __func__, __LINE__, ie_len);
     }
 
     for_each_element(elem, (unsigned char *)(l_variable), ie_len) {
@@ -827,6 +830,7 @@ void create_connect_steering_event(wifi_interface_info_t *interface, wifi_steeri
             }
         }
     }
+    wifi_hal_dbg_print("%s:%d: Exit Manish\n", __func__, __LINE__);
 }
 
 static void fill_steering_event_general(wifi_steering_event_t *event, wifi_steering_eventType_t type, wifi_vap_info_t *vap)
